@@ -1,0 +1,23 @@
+# Reddit API
+praw==7.7.1
+
+# Text-to-Speech (Free - Microsoft Edge TTS)
+edge-tts==6.1.9
+
+# Video Processing
+moviepy==1.0.3
+Pillow==10.1.0
+numpy==1.26.2
+
+# YouTube Upload
+google-api-python-client==2.108.0
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+
+# Audio Processing
+pydub==0.25.1
+
+# Utilities
+python-dotenv==1.0.0
+aiohttp==3.9.1
+aiofiles==23.2.1
