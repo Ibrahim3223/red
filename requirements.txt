@@ -7,7 +7,7 @@ gTTS==2.5.0
 
 # Video Processing
 moviepy==1.0.3
-Pillow==10.1.0
+Pillow==9.5.0
 numpy==1.26.2
 
 # YouTube Upload
