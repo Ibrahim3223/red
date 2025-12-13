@@ -1,5 +1,5 @@
-# Reddit API
-praw==7.7.1
+# HTTP Requests (for Reddit JSON + Joke APIs)
+requests==2.31.0
 
 # Text-to-Speech (Free - Microsoft Edge TTS)
 edge-tts==6.1.9
