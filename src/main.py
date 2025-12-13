@@ -12,6 +12,9 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
+# Get project root directory (parent of src/)
+PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -28,9 +31,12 @@ class RedditVideoBot:
 
     def __init__(
         self,
-        output_dir: str = "output",
-        assets_dir: str = "assets"
+        output_dir: str = None,
+        assets_dir: str = None
     ):
+        # Use project root for default paths
+        output_dir = output_dir or str(PROJECT_ROOT / "output")
+        assets_dir = assets_dir or str(PROJECT_ROOT / "assets")
         self.output_dir = Path(output_dir)
         self.assets_dir = Path(assets_dir)
 
