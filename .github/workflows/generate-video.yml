@@ -42,7 +42,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          lfs: true  # For large background video files
+          lfs: true
+
+      - name: Pull LFS files
+        run: |
+          git lfs install
+          git lfs pull
+          echo "LFS files pulled"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -73,24 +79,45 @@ jobs:
 
       - name: Check assets
         run: |
-          echo "Checking required assets..."
+          echo "=== Checking assets ==="
+          echo ""
+          echo "📁 assets/backgrounds/ contents:"
+          ls -la assets/backgrounds/ || echo "Directory not found"
+          echo ""
+          echo "📁 Checking for .mp4 files:"
+          find assets/backgrounds -name "*.mp4" -type f 2>/dev/null || echo "No .mp4 files found"
+          echo ""
 
-          # Check for background videos
-          if [ -z "$(ls -A assets/backgrounds/*.mp4 2>/dev/null)" ]; then
-            echo "⚠️ WARNING: No background videos found in assets/backgrounds/"
-            echo "Please add .mp4 files (Minecraft parkour, Subway Surfer, etc.)"
+          # Check file sizes (LFS pointers are small ~130 bytes)
+          echo "📊 File sizes:"
+          for f in assets/backgrounds/*.mp4 2>/dev/null; do
+            if [ -f "$f" ]; then
+              size=$(stat -f%z "$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null)
+              echo "  $f: $size bytes"
+              if [ "$size" -lt 1000 ]; then
+                echo "    ⚠️ WARNING: File too small, might be LFS pointer!"
+              fi
+            fi
+          done
+          echo ""
+
+          # Verify at least one valid video exists
+          valid_video=false
+          for f in assets/backgrounds/*.mp4 2>/dev/null; do
+            if [ -f "$f" ]; then
+              size=$(stat -f%z "$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null)
+              if [ "$size" -gt 10000 ]; then
+                valid_video=true
+                echo "✅ Valid video found: $f"
+                break
+              fi
+            fi
+          done
+
+          if [ "$valid_video" = false ]; then
+            echo "❌ ERROR: No valid background videos found!"
+            echo "Please ensure .mp4 files are properly uploaded with Git LFS"
             exit 1
-          fi
-
-          echo "✅ Background videos found:"
-          ls -la assets/backgrounds/
-
-          # Check for sound effects (optional)
-          if [ -z "$(ls -A assets/sounds/punchline/*.mp3 2>/dev/null)" ]; then
-            echo "ℹ️ No punchline sound effects found (optional)"
-          else
-            echo "✅ Sound effects found:"
-            ls -la assets/sounds/punchline/
           fi
 
       - name: Generate video
