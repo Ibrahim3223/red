@@ -7,7 +7,8 @@
       "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: Reddit Video Bot\n\n- Reddit scraper for fetching top jokes\n- Edge TTS for free text-to-speech\n- MoviePy video composer with animated text\n- YouTube uploader with OAuth\n- GitHub Actions workflow (2x daily)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git branch:*)",
       "Bash(git remote add:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

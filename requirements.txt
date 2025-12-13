@@ -1,8 +1,9 @@
 # HTTP Requests (for Reddit JSON + Joke APIs)
 requests==2.31.0
 
-# Text-to-Speech (Free - Microsoft Edge TTS)
+# Text-to-Speech
 edge-tts==6.1.9
+gTTS==2.5.0
 
 # Video Processing
 moviepy==1.0.3
