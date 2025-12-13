@@ -80,43 +80,15 @@ jobs:
       - name: Check assets
         run: |
           echo "=== Checking assets ==="
-          echo ""
           echo "📁 assets/backgrounds/ contents:"
-          ls -la assets/backgrounds/ || echo "Directory not found"
-          echo ""
-          echo "📁 Checking for .mp4 files:"
-          find assets/backgrounds -name "*.mp4" -type f 2>/dev/null || echo "No .mp4 files found"
-          echo ""
+          ls -la assets/backgrounds/
 
-          # Check file sizes (LFS pointers are small ~130 bytes)
-          echo "📊 File sizes:"
-          for f in assets/backgrounds/*.mp4 2>/dev/null; do
-            if [ -f "$f" ]; then
-              size=$(stat -f%z "$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null)
-              echo "  $f: $size bytes"
-              if [ "$size" -lt 1000 ]; then
-                echo "    ⚠️ WARNING: File too small, might be LFS pointer!"
-              fi
-            fi
-          done
-          echo ""
+          # Count valid mp4 files (larger than 10KB)
+          valid_count=$(find assets/backgrounds -name "*.mp4" -type f -size +10k 2>/dev/null | wc -l)
+          echo "✅ Found $valid_count valid video file(s)"
 
-          # Verify at least one valid video exists
-          valid_video=false
-          for f in assets/backgrounds/*.mp4 2>/dev/null; do
-            if [ -f "$f" ]; then
-              size=$(stat -f%z "$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null)
-              if [ "$size" -gt 10000 ]; then
-                valid_video=true
-                echo "✅ Valid video found: $f"
-                break
-              fi
-            fi
-          done
-
-          if [ "$valid_video" = false ]; then
+          if [ "$valid_count" -eq 0 ]; then
             echo "❌ ERROR: No valid background videos found!"
-            echo "Please ensure .mp4 files are properly uploaded with Git LFS"
             exit 1
           fi
 
