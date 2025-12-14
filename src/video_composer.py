@@ -1,12 +1,12 @@
 """
 Video Composer Module
-Creates Reddit story videos with tweet-style text overlays.
+Creates Reddit story videos with realistic tweet-style text overlays.
 """
 
 import os
 import random
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 from dataclasses import dataclass
 import textwrap
 
@@ -32,17 +32,19 @@ class VideoConfig:
     height: int = 1920
     fps: int = 30
     # Tweet card settings
-    card_width: int = 900
-    card_padding: int = 40
-    card_radius: int = 30
-    card_bg_color: tuple = (255, 255, 255)  # White
-    text_color: tuple = (15, 20, 25)  # Twitter dark text
-    username_color: tuple = (83, 100, 113)  # Twitter gray
-    highlight_color: tuple = (29, 155, 240)  # Twitter blue
+    card_width: int = 980
+    card_margin: int = 50
+    card_radius: int = 24
+    card_bg_color: tuple = (255, 255, 255)
+    text_color: tuple = (15, 20, 25)
+    secondary_color: tuple = (83, 100, 113)
+    accent_color: tuple = (29, 155, 240)  # Twitter blue
+    like_color: tuple = (249, 24, 128)  # Pink for likes
+    retweet_color: tuple = (0, 186, 124)  # Green for retweets
 
 
 class VideoComposer:
-    """Composes videos with tweet-style text cards."""
+    """Composes videos with realistic tweet-style text cards."""
 
     def __init__(
         self,
@@ -57,6 +59,13 @@ class VideoComposer:
         self.font_path = self._find_font()
         self.font_bold_path = self._find_font(bold=True)
 
+        # Import title generator for usernames
+        try:
+            from title_generator import TitleGenerator
+            self.title_gen = TitleGenerator()
+        except:
+            self.title_gen = None
+
     def _find_font(self, bold: bool = False) -> str:
         """Finds a suitable font."""
         if bold:
@@ -64,7 +73,7 @@ class VideoComposer:
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
                 "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
                 "C:/Windows/Fonts/arialbd.ttf",
-                "C:/Windows/Fonts/segoeui.ttf",
+                "C:/Windows/Fonts/seguisb.ttf",
             ]
         else:
             candidates = [
@@ -77,8 +86,6 @@ class VideoComposer:
         for font in candidates:
             if os.path.exists(font):
                 return font
-
-        # Return first candidate as fallback (PIL will use default)
         return candidates[0]
 
     def get_random_background(self) -> str:
@@ -88,166 +95,184 @@ class VideoComposer:
             f for f in self.backgrounds_dir.iterdir()
             if f.suffix.lower() in video_extensions
         ]
-
         if not backgrounds:
-            raise FileNotFoundError(
-                f"No background videos found in {self.backgrounds_dir}"
-            )
-
+            raise FileNotFoundError(f"No background videos found in {self.backgrounds_dir}")
         return str(random.choice(backgrounds))
+
+    def _get_user_info(self) -> Tuple[str, str, str, str, str]:
+        """Gets user info (name, handle, likes, retweets, comments)."""
+        if self.title_gen:
+            name, handle = self.title_gen.generate_username()
+            likes, rts, comments = self.title_gen.generate_engagement_stats()
+        else:
+            name, handle = "JokeMaster", "@joke_master"
+            likes, rts, comments = "24.5K", "5.2K", "1.8K"
+        return name, handle, likes, rts, comments
 
     def create_tweet_card(
         self,
         text: str,
-        username: str = "@RedditJokes",
-        highlight_last_line: bool = False,
-        show_all: bool = True
+        display_name: str,
+        handle: str,
+        likes: str,
+        retweets: str,
+        comments: str,
+        highlight_last: bool = False
     ) -> Image.Image:
-        """
-        Creates a tweet-style card image.
-
-        Args:
-            text: The joke text
-            username: Display username
-            highlight_last_line: Highlight the punchline
-            show_all: Show all text or just setup
-
-        Returns:
-            PIL Image of the tweet card
-        """
+        """Creates a realistic tweet-style card."""
         cfg = self.config
 
         # Load fonts
         try:
-            font_large = ImageFont.truetype(self.font_bold_path, 52)
-            font_text = ImageFont.truetype(self.font_path, 44)
-            font_small = ImageFont.truetype(self.font_path, 32)
+            font_name = ImageFont.truetype(self.font_bold_path, 42)
+            font_handle = ImageFont.truetype(self.font_path, 36)
+            font_text = ImageFont.truetype(self.font_path, 48)
+            font_text_bold = ImageFont.truetype(self.font_bold_path, 48)
+            font_stats = ImageFont.truetype(self.font_path, 32)
         except:
-            font_large = ImageFont.load_default()
-            font_text = font_large
-            font_small = font_large
+            font_name = font_handle = font_text = font_text_bold = font_stats = ImageFont.load_default()
 
-        # Wrap text
-        wrapper = textwrap.TextWrapper(width=35)
+        # Wrap text into lines
+        wrapper = textwrap.TextWrapper(width=32)
         lines = []
         for paragraph in text.split('\n'):
             if paragraph.strip():
                 wrapped = wrapper.wrap(paragraph.strip())
                 lines.extend(wrapped)
-                lines.append('')  # Empty line between paragraphs
 
-        # Remove trailing empty lines
-        while lines and not lines[-1]:
-            lines.pop()
+        # Calculate dimensions
+        line_height = 62
+        padding = 40
+        header_height = 90
+        text_height = max(len(lines) * line_height, 120)
+        footer_height = 70
+        total_height = header_height + text_height + footer_height + padding * 2
 
-        # Calculate card height
-        line_height = 58
-        header_height = 100
-        footer_height = 80
-        text_height = len(lines) * line_height
-        card_height = header_height + text_height + footer_height + cfg.card_padding * 2
+        # Create card with shadow
+        shadow_offset = 8
+        full_width = cfg.card_width + shadow_offset * 2
+        full_height = total_height + shadow_offset * 2
 
-        # Create card with rounded corners
-        card = Image.new('RGBA', (cfg.card_width, card_height), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(card)
+        # Create image with transparency
+        img = Image.new('RGBA', (full_width, full_height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
 
-        # Draw rounded rectangle background
+        # Draw shadow
+        shadow_color = (0, 0, 0, 40)
         self._draw_rounded_rect(
             draw,
-            (0, 0, cfg.card_width, card_height),
+            (shadow_offset + 4, shadow_offset + 4,
+             cfg.card_width + shadow_offset + 4, total_height + shadow_offset + 4),
             cfg.card_radius,
-            cfg.card_bg_color + (250,)  # Slight transparency
+            shadow_color
         )
 
-        # Draw profile picture placeholder (circle)
-        avatar_x, avatar_y = cfg.card_padding, cfg.card_padding
-        avatar_size = 60
-        draw.ellipse(
-            [avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size],
-            fill=(29, 155, 240)  # Twitter blue
-        )
+        # Draw main card
+        card_rect = (shadow_offset, shadow_offset,
+                     cfg.card_width + shadow_offset, total_height + shadow_offset)
+        self._draw_rounded_rect(draw, card_rect, cfg.card_radius, cfg.card_bg_color + (255,))
 
-        # Draw "R" in avatar
+        # Starting positions
+        x_start = shadow_offset + padding
+        y_pos = shadow_offset + padding
+
+        # Draw avatar (gradient circle)
+        avatar_size = 56
+        avatar_x = x_start
+        avatar_y = y_pos
+
+        # Create gradient avatar
+        for i in range(avatar_size):
+            alpha = int(255 * (1 - i / avatar_size * 0.3))
+            color = (
+                min(255, cfg.accent_color[0] + i),
+                min(255, cfg.accent_color[1] + i // 2),
+                min(255, cfg.accent_color[2]),
+                alpha
+            )
+            draw.ellipse(
+                [avatar_x + i//4, avatar_y + i//4,
+                 avatar_x + avatar_size - i//4, avatar_y + avatar_size - i//4],
+                fill=color[:3]
+            )
+
+        # Draw letter in avatar
+        letter = display_name[0].upper() if display_name else "U"
         try:
-            avatar_font = ImageFont.truetype(self.font_bold_path, 36)
+            letter_font = ImageFont.truetype(self.font_bold_path, 28)
         except:
-            avatar_font = font_large
+            letter_font = font_name
+        bbox = draw.textbbox((0, 0), letter, font=letter_font)
+        letter_w = bbox[2] - bbox[0]
+        letter_h = bbox[3] - bbox[1]
         draw.text(
-            (avatar_x + 18, avatar_y + 10),
-            "R",
-            font=avatar_font,
+            (avatar_x + (avatar_size - letter_w) // 2,
+             avatar_y + (avatar_size - letter_h) // 2 - 2),
+            letter,
+            font=letter_font,
             fill=(255, 255, 255)
         )
 
-        # Draw username
-        name_x = avatar_x + avatar_size + 15
-        draw.text(
-            (name_x, avatar_y + 5),
-            "Reddit Jokes",
-            font=font_large,
-            fill=cfg.text_color
-        )
-        draw.text(
-            (name_x, avatar_y + 45),
-            username,
-            font=font_small,
-            fill=cfg.username_color
-        )
+        # Draw display name and handle
+        name_x = avatar_x + avatar_size + 16
+        draw.text((name_x, y_pos + 2), display_name, font=font_name, fill=cfg.text_color)
 
-        # Draw text lines
-        text_y = header_height + cfg.card_padding
+        # Draw verified badge
+        badge_x = name_x + draw.textlength(display_name, font=font_name) + 8
+        badge_y = y_pos + 8
+        badge_size = 22
+        draw.ellipse(
+            [badge_x, badge_y, badge_x + badge_size, badge_y + badge_size],
+            fill=cfg.accent_color
+        )
+        # Checkmark
+        draw.text((badge_x + 4, badge_y + 1), "✓", font=ImageFont.truetype(self.font_bold_path, 16) if os.path.exists(self.font_bold_path) else font_stats, fill=(255, 255, 255))
+
+        # Handle
+        draw.text((name_x, y_pos + 38), handle, font=font_handle, fill=cfg.secondary_color)
+
+        # Draw text content
+        y_pos = shadow_offset + padding + header_height
         for i, line in enumerate(lines):
-            if not line:
-                continue
+            is_last_line = i == len(lines) - 1
 
-            is_last = i == len(lines) - 1 or (i == len(lines) - 2 and not lines[-1])
-
-            if highlight_last_line and is_last:
-                # Highlight punchline
-                color = cfg.highlight_color
-                try:
-                    line_font = ImageFont.truetype(self.font_bold_path, 46)
-                except:
-                    line_font = font_text
+            if highlight_last and is_last_line:
+                draw.text((x_start, y_pos), line, font=font_text_bold, fill=cfg.accent_color)
             else:
-                color = cfg.text_color
-                line_font = font_text
+                draw.text((x_start, y_pos), line, font=font_text, fill=cfg.text_color)
+            y_pos += line_height
 
-            draw.text(
-                (cfg.card_padding, text_y),
-                line,
-                font=line_font,
-                fill=color
-            )
-            text_y += line_height
+        # Draw footer with engagement stats
+        footer_y = total_height + shadow_offset - footer_height + 10
+        stat_x = x_start
 
-        # Draw footer (likes, retweets icons as text)
-        footer_y = card_height - footer_height + 10
-        footer_text = "❤️ 12.5K    🔁 3.2K    💬 892"
-        draw.text(
-            (cfg.card_padding, footer_y),
-            footer_text,
-            font=font_small,
-            fill=cfg.username_color
-        )
+        # Comments icon and count
+        draw.text((stat_x, footer_y), "💬", font=font_stats, fill=cfg.secondary_color)
+        draw.text((stat_x + 35, footer_y), comments, font=font_stats, fill=cfg.secondary_color)
 
-        return card
+        # Retweets
+        stat_x += 140
+        draw.text((stat_x, footer_y), "🔁", font=font_stats, fill=cfg.retweet_color)
+        draw.text((stat_x + 35, footer_y), retweets, font=font_stats, fill=cfg.secondary_color)
 
-    def _draw_rounded_rect(
-        self,
-        draw: ImageDraw,
-        coords: tuple,
-        radius: int,
-        fill: tuple
-    ):
+        # Likes
+        stat_x += 140
+        draw.text((stat_x, footer_y), "❤️", font=font_stats, fill=cfg.like_color)
+        draw.text((stat_x + 35, footer_y), likes, font=font_stats, fill=cfg.secondary_color)
+
+        # Views/Share
+        stat_x += 140
+        draw.text((stat_x, footer_y), "📊", font=font_stats, fill=cfg.secondary_color)
+        views = f"{random.randint(100, 500)}K"
+        draw.text((stat_x + 35, footer_y), views, font=font_stats, fill=cfg.secondary_color)
+
+        return img
+
+    def _draw_rounded_rect(self, draw, coords, radius, fill):
         """Draws a rounded rectangle."""
         x1, y1, x2, y2 = coords
-
-        # Draw rectangles
         draw.rectangle([x1 + radius, y1, x2 - radius, y2], fill=fill)
         draw.rectangle([x1, y1 + radius, x2, y2 - radius], fill=fill)
-
-        # Draw corners
         draw.pieslice([x1, y1, x1 + 2*radius, y1 + 2*radius], 180, 270, fill=fill)
         draw.pieslice([x2 - 2*radius, y1, x2, y1 + 2*radius], 270, 360, fill=fill)
         draw.pieslice([x1, y2 - 2*radius, x1 + 2*radius, y2], 90, 180, fill=fill)
@@ -259,35 +284,34 @@ class VideoComposer:
         total_duration: float,
         full_text: str
     ) -> list[ImageClip]:
-        """
-        Creates tweet card clips that reveal text progressively.
-        """
+        """Creates tweet card clips that reveal text progressively."""
         clips = []
         cfg = self.config
 
-        # Build text progressively
-        accumulated_text = ""
+        # Get user info once for consistency
+        name, handle, likes, rts, comments = self._get_user_info()
 
+        accumulated_text = ""
         for i, segment in enumerate(segments):
             accumulated_text += segment.text + "\n"
             is_last = i == len(segments) - 1
 
-            # Calculate duration
             if i + 1 < len(segments):
                 duration = segments[i + 1].start_time - segment.start_time
             else:
                 duration = total_duration - segment.start_time
 
-            # Create tweet card
             card_img = self.create_tweet_card(
                 text=accumulated_text.strip(),
-                highlight_last_line=is_last
+                display_name=name,
+                handle=handle,
+                likes=likes,
+                retweets=rts,
+                comments=comments,
+                highlight_last=is_last
             )
 
-            # Convert to numpy array for MoviePy
             card_array = np.array(card_img)
-
-            # Create ImageClip
             clip = ImageClip(card_array)
             clip = clip.set_duration(duration)
             clip = clip.set_start(segment.start_time)
@@ -301,46 +325,27 @@ class VideoComposer:
 
         return clips
 
-    def prepare_background(
-        self,
-        background_path: str,
-        target_duration: float
-    ) -> VideoFileClip:
-        """Prepares background video: crops to vertical, loops if needed."""
+    def prepare_background(self, background_path: str, target_duration: float) -> VideoFileClip:
+        """Prepares background video."""
         clip = VideoFileClip(background_path)
-
         clip_w, clip_h = clip.size
         target_ratio = self.config.width / self.config.height
 
         if clip_w / clip_h > target_ratio:
             new_width = int(clip_h * target_ratio)
-            clip = crop(
-                clip,
-                x_center=clip_w / 2,
-                y_center=clip_h / 2,
-                width=new_width,
-                height=clip_h
-            )
+            clip = crop(clip, x_center=clip_w/2, y_center=clip_h/2, width=new_width, height=clip_h)
         else:
             new_height = int(clip_w / target_ratio)
-            clip = crop(
-                clip,
-                x_center=clip_w / 2,
-                y_center=clip_h / 2,
-                width=clip_w,
-                height=new_height
-            )
+            clip = crop(clip, x_center=clip_w/2, y_center=clip_h/2, width=clip_w, height=new_height)
 
         clip = resize(clip, (self.config.width, self.config.height))
 
-        # Loop if needed
         if clip.duration < target_duration:
             n_loops = int(target_duration / clip.duration) + 1
             clip = concatenate_videoclips([clip] * n_loops)
 
         clip = clip.subclip(0, target_duration)
         clip = clip.without_audio()
-
         return clip
 
     def compose_video(
@@ -354,52 +359,35 @@ class VideoComposer:
     ) -> str:
         """Composes the final video with tweet-style overlay."""
 
-        # Ensure minimum duration of 10 seconds
+        # Minimum 10 seconds
         min_duration = 10.0
         audio_duration = tts_result.total_duration
+        total_duration = max(min_duration, audio_duration + 2.0)
 
-        if audio_duration < min_duration:
-            # Add padding at the end
-            total_duration = min_duration
-        else:
-            total_duration = audio_duration + 2.0
-
-        # Get background
         if background_path is None:
             background_path = self.get_random_background()
 
         background = self.prepare_background(background_path, total_duration)
+        tweet_clips = self.create_tweet_clips(tts_result.segments, total_duration, full_text)
 
-        # Create tweet card clips
-        tweet_clips = self.create_tweet_clips(
-            tts_result.segments,
-            total_duration,
-            full_text
-        )
-
-        # Compose layers
         video_layers = [background] + tweet_clips
         final_video = CompositeVideoClip(video_layers)
 
-        # Audio
         tts_audio = AudioFileClip(tts_result.audio_file)
         audio_clips = [tts_audio]
 
-        # Sound effect
         if sound_effect_path and os.path.exists(sound_effect_path):
             sfx = AudioFileClip(sound_effect_path)
             if sound_effect_time is None and tts_result.segments:
                 sound_effect_time = tts_result.segments[-1].start_time
             if sound_effect_time is not None:
-                sfx = sfx.set_start(sound_effect_time)
-                sfx = sfx.volumex(0.5)
+                sfx = sfx.set_start(sound_effect_time).volumex(0.5)
                 audio_clips.append(sfx)
 
         final_audio = CompositeAudioClip(audio_clips)
         final_video = final_video.set_audio(final_audio)
         final_video = final_video.set_duration(total_duration)
 
-        # Export
         output_path = self.output_dir / output_filename
         final_video.write_videofile(
             str(output_path),
@@ -410,7 +398,6 @@ class VideoComposer:
             threads=4
         )
 
-        # Cleanup
         background.close()
         tts_audio.close()
         final_video.close()
@@ -418,6 +405,5 @@ class VideoComposer:
         return str(output_path)
 
 
-# For testing
 if __name__ == "__main__":
     print("Video composer with tweet-style cards loaded!")
