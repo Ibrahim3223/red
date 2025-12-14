@@ -198,8 +198,7 @@ class YouTubeUploader:
             'status': {
                 'privacyStatus': privacy_status,
                 'selfDeclaredMadeForKids': made_for_kids,
-            },
-            'notifySubscribers': notify_subscribers
+            }
         }
 
         # Create media upload
@@ -210,11 +209,12 @@ class YouTubeUploader:
             chunksize=1024 * 1024  # 1MB chunks
         )
 
-        # Execute upload
+        # Execute upload (notifySubscribers is a separate parameter, not part of body)
         request = self.youtube.videos().insert(
-            part=','.join(body.keys()),
+            part='snippet,status',
             body=body,
-            media_body=media
+            media_body=media,
+            notifySubscribers=notify_subscribers
         )
 
         response = None
