@@ -28,10 +28,12 @@ on:
           - unlisted
 
 env:
-  # Only YouTube credentials needed (Reddit uses public JSON endpoints)
+  # YouTube credentials
   YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
   YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
   YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+  # Groq API for AI-generated titles
+  GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
 
 jobs:
   generate-video:

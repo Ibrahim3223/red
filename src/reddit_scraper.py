@@ -100,9 +100,9 @@ class RedditScraper:
         self,
         subreddits: Optional[list[str]] = None,
         time_filter: str = "day",
-        min_score: int = 100,
-        max_length: int = 500,
-        min_length: int = 50
+        min_score: int = 50,
+        max_length: int = 800,
+        min_length: int = 100  # Increased for longer videos (10+ seconds)
     ) -> Optional[RedditPost]:
         """
         Fetches a top joke suitable for a short video.

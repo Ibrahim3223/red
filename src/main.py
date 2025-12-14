@@ -24,6 +24,7 @@ from tts_generator import TTSGenerator, TTSResult
 from video_composer import VideoComposer, VideoConfig
 from audio_mixer import AudioMixer
 from youtube_uploader import YouTubeUploader
+from title_generator import TitleGenerator
 
 
 class RedditVideoBot:
@@ -61,6 +62,7 @@ class RedditVideoBot:
             output_dir=str(self.output_dir / "audio")
         )
         self.uploader = YouTubeUploader()
+        self.title_gen = TitleGenerator()
 
         # Track generated videos to avoid duplicates
         self.history_file = self.output_dir / "history.json"
@@ -87,10 +89,10 @@ class RedditVideoBot:
         print("📥 Fetching joke from Reddit...")
 
         joke = self.scraper.get_top_joke(
-            time_filter="day",
-            min_score=100,
-            max_length=400,  # Keep short for ~30sec video
-            min_length=50
+            time_filter="week",  # Look at week for more options
+            min_score=50,
+            max_length=800,
+            min_length=100  # Longer jokes for 10+ second videos
         )
 
         if not joke:
@@ -100,7 +102,6 @@ class RedditVideoBot:
         # Skip if already generated
         if self._is_already_generated(joke.post_id):
             print(f"⏭️ Skipping already used post: {joke.post_id}")
-            # Try to get another one
             jokes = self.scraper.get_multiple_jokes(count=10)
             for j in jokes:
                 if not self._is_already_generated(j.post_id):
@@ -122,7 +123,7 @@ class RedditVideoBot:
             result = await self.tts.generate_with_pause(
                 setup=joke.setup,
                 punchline=joke.punchline,
-                pause_duration=0.8,
+                pause_duration=1.0,  # Longer pause for dramatic effect
                 filename=f"{joke.post_id}.mp3"
             )
         else:
@@ -133,25 +134,6 @@ class RedditVideoBot:
 
         print(f"✅ Audio generated: {result.total_duration:.1f}s")
         return result
-
-    def add_sound_effects(self, tts_result: TTSResult) -> str:
-        """Adds sound effects to audio."""
-        print("🔊 Adding sound effects...")
-
-        # Find punchline timing
-        punchline_time = None
-        if tts_result.segments:
-            punchline_time = tts_result.segments[-1].start_time
-
-        # Process audio
-        processed = self.mixer.process_video_audio(
-            tts_audio_path=tts_result.audio_file,
-            punchline_time=punchline_time,
-            add_music=False  # No background music for now
-        )
-
-        print("✅ Sound effects added")
-        return processed
 
     def generate_video(
         self,
@@ -169,12 +151,13 @@ class RedditVideoBot:
         if tts_result.segments:
             sfx_time = tts_result.segments[-1].start_time
 
-        # Compose video
+        # Compose video with tweet-style overlay
         video_path = self.composer.compose_video(
             tts_result=tts_result,
             output_filename=f"{joke.post_id}.mp4",
             sound_effect_path=sfx_path,
-            sound_effect_time=sfx_time
+            sound_effect_time=sfx_time,
+            full_text=joke.full_text
         )
 
         print(f"✅ Video generated: {video_path}")
@@ -196,20 +179,23 @@ class RedditVideoBot:
             print("⚠️ YouTube credentials not found in env, trying local auth...")
             self.uploader.authenticate()
 
-        # Generate title and description
-        title = self.uploader.generate_title(joke.setup, joke.subreddit)
-        description = self.uploader.generate_description(
-            joke.full_text,
-            joke.subreddit,
-            joke.url
+        # Generate title and description using Groq AI
+        print("🤖 Generating title with AI...")
+        title = self.title_gen.generate_title(joke.setup, joke.punchline)
+        description = self.title_gen.generate_description(
+            joke.setup,
+            joke.punchline,
+            joke.subreddit
         )
+
+        print(f"📝 Title: {title}")
 
         # Upload
         result = self.uploader.upload_video(
             video_path=video_path,
             title=title,
             description=description,
-            tags=[joke.subreddit, "reddit", "jokes", "funny"],
+            tags=[joke.subreddit, "reddit", "jokes", "funny", "shorts", "comedy"],
             privacy_status=privacy
         )
 
@@ -223,13 +209,6 @@ class RedditVideoBot:
     ) -> Optional[dict]:
         """
         Runs the full video generation pipeline.
-
-        Args:
-            upload: Whether to upload to YouTube
-            privacy: YouTube privacy setting
-
-        Returns:
-            Result dict with video info or None if failed
         """
         print("\n" + "=" * 50)
         print("🤖 Reddit Video Bot Starting...")
