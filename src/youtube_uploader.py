@@ -108,14 +108,23 @@ class YouTubeUploader:
         Returns:
             True if authentication successful
         """
-        client_id = os.getenv('YOUTUBE_CLIENT_ID')
-        client_secret = os.getenv('YOUTUBE_CLIENT_SECRET')
-        refresh_token = os.getenv('YOUTUBE_REFRESH_TOKEN')
+        client_id = os.getenv('YOUTUBE_CLIENT_ID', '').strip()
+        client_secret = os.getenv('YOUTUBE_CLIENT_SECRET', '').strip()
+        refresh_token = os.getenv('YOUTUBE_REFRESH_TOKEN', '').strip()
 
-        if not all([client_id, client_secret, refresh_token]):
+        # Debug: show which credentials are missing
+        missing = []
+        if not client_id:
+            missing.append("YOUTUBE_CLIENT_ID")
+        if not client_secret:
+            missing.append("YOUTUBE_CLIENT_SECRET")
+        if not refresh_token:
+            missing.append("YOUTUBE_REFRESH_TOKEN")
+
+        if missing:
             raise ValueError(
-                "Missing YouTube credentials in environment variables.\n"
-                "Required: YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN"
+                f"Missing YouTube credentials: {', '.join(missing)}\n"
+                "Add these as GitHub repository secrets (Settings > Secrets > Actions)"
             )
 
         creds = Credentials(
